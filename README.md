@@ -1,0 +1,3 @@
+# dbinu
+
+**dbinu** is a triplestore database intended to be blazing fast, versatile, and easy to use. Whether it will be that way, I have no idea...
