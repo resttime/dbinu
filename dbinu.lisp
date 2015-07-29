@@ -47,5 +47,11 @@
       (remove-if-not (lambda (triple) (equal (triple-i triple) i)) triples)
       triples))
 
-(defun filter-triples (ts &optional s p o i)
-  (filter-sub (filter-pre (filter-obj (filter-i (all-triples ts) i) o) p) s))
+(defun filter-triples (ts &key s p o i)
+  (filter-obj (filter-pre (filter-sub (filter-i (all-triples ts) i) o) p) s))
+
+(defun remove-triples (ts &key s p o i)
+  (let ((triple-ids (loop for triple in (filter-triples ts :s s :p p :o o :i i)
+		       collect (triple-i triple))))
+    (loop for id in triple-ids
+       do (remhash id ts))))
