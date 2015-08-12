@@ -2,56 +2,65 @@
 (defpackage dbinu
   (:use :cl)
   (:import-from :uuid
-		:make-v1-uuid))
+		:make-v1-uuid)
+  (:import-from :conspack
+		:encode
+		:decode))
 (in-package :dbinu)
 
 (defstruct triple
-  sub
-  pre
-  obj
-  g
-  i)
+  subject
+  predicate
+  object
+  graph
+  id)
 
-(defun make-triplestore () (make-hash-table :test 'equal))
+(defun make-triplestore () (make-hash-table))
 
-(defun add-triple (ts s p o)
-  (let ((triple-id (make-v1-uuid)))
-    (setf (gethash triple-id ts)
-	  (make-triple :sub s
-		       :pre p
-		       :obj o
-		       :i triple-id))))
+(defun add-triple (triplestore s p o)
+  (let* ((triple-id (make-v1-uuid))
+	 (new-triple (make-triple :sub s :pre p :obj o :i triple-id)))
+    (setf (gethash triple-id triplestore) new-triple)))
 
-(defun all-triples (ts)
-  (loop for triple being the hash-values of ts
+(defun all-triples (triplestore)
+  (loop for triple being the hash-values of triplestore
      using (hash-key key)
      collect triple))
 
 (defun filter-sub (triples s)
   (if s
-      (remove-if-not (lambda (triple) (equal (triple-sub triple) s)) triples)
+      (remove-if-not (lambda (triple) (equal (triple-subject triple) s)) triples)
       triples))
 
 (defun filter-pre (triples p)
   (if p
-      (remove-if-not (lambda (triple) (equal (triple-pre triple) p)) triples)
+      (remove-if-not (lambda (triple) (equal (triple-predicate triple) p)) triples)
       triples))
 
 (defun filter-obj (triples o)
   (if o
-      (remove-if-not (lambda (triple) (equal (triple-obj triple) o)) triples)
+      (remove-if-not (lambda (triple) (equal (triple-object triple) o)) triples)
       triples))
 
 (defun filter-i (triples i)
   (if i
-      (remove-if-not (lambda (triple) (equal (triple-i triple) i)) triples)
+      (remove-if-not (lambda (triple) (equal (triple-id triple) i)) triples)
       triples))
 
-(defun filter-triples (ts &key s p o i)
-  (filter-obj (filter-pre (filter-sub (filter-i (all-triples ts) i) o) p) s))
+(defun filter-triples (triplestore &key s p o i)
+  (filter-obj (filter-pre (filter-sub (filter-i (all-triples triplestore) i) o) p) s))
 
-(defun remove-triples (ts &key s p o i)
-  (let ((triple-ids (loop for triple in (filter-triples ts :s s :p p :o o :i i)
-		       collect (triple-i triple))))
+(defun remove-triples (triplestore &key s p o i)
+  (let ((triple-ids (loop for triple in (filter-triples triplestore :s s :p p :o o :i i)
+		       collect (triple-id triple))))
     (loop for id in triple-ids
-       do (remhash id ts))))
+       do (remhash id triplestore))))
+
+(defun backup-triplestore (triplestore pathname)
+  (with-open-file (out pathname
+		       :direction :output
+		       :if-exists :supersede
+		       :element-type 'octet)
+    (write-sequence (encode triplestore) out)))
+
+(defun load-triplestore ())
