@@ -5,7 +5,7 @@
 		:make-v1-uuid)
   (:import-from :conspack
 		:encode
-		:decode))
+		:decode-file))
 (in-package :dbinu)
 
 (defstruct triple
@@ -56,11 +56,12 @@
     (loop for id in triple-ids
        do (remhash id triplestore))))
 
-(defun backup-triplestore (triplestore pathname)
-  (with-open-file (out pathname
+(defun backup-triplestore (triplestore filepath)
+  (with-open-file (out filepath
 		       :direction :output
 		       :if-exists :supersede
-		       :element-type 'octet)
+		       :element-type '(unsigned-byte 8))
     (write-sequence (encode triplestore) out)))
 
-(defun load-triplestore ())
+(defun load-triplestore (filepath)
+  (decode-file filepath))
