@@ -1,4 +1,4 @@
-(in-package :dbinu)
+(in-package #:dbinu)
 
 (defvar *ts* (make-hash-table))
 (defvar *spo* (make-hash-table :test 'equal))
@@ -15,27 +15,25 @@
 (defencoding triple
   subject predicate object graph id)
 
+(defun collect-hash-keys (ht)
+ (loop for key being the hash-keys of ht
+    using (hash-value value)
+    when (> (hash-table-count value) 0)
+    collect key))
+
 (defun all-uuids ()
   "Returns a list of all uuids of the triples in the triplestore."
-  (loop for uuid being the hash-keys of *ts*
-     collect uuid))
+  (collect-hash-keys *ts*))
 
 (defun all-triples ()
   "Returns a list of all triples in the triplestore."
-  (loop for triple being the hash-values of *ts*
-     collect triple))
+  (loop for triple being the hash-values of *ts* collect triple))
 
-(defun all-subjects ()
-  (loop for subject being the hash-keys of *spo*
-     collect subject))
+(defun all-subjects () (collect-hash-keys *spo*))
 
-(defun all-predicates ()
-  (loop for predicate being the hash-keys of *pos*
-     collect predicate))
+(defun all-predicates () (collect-hash-keys *pos*))
 
-(defun all-objects ()
-  (loop for objects being the hash-keys of *osp*
-     collect objects))
+(defun all-objects () (collect-hash-keys *osp*))
 
 (defun add-entry (index entry)
   "Index a single entry."
@@ -49,6 +47,37 @@
   "Index every entry in entries."
   (mapc (lambda (entry) (add-entry index entry)) entries))
 
+(defun remove-entry (index entry)
+  (cond ((eq (cddr entry) nil)
+	 (setf (gethash (car entry) index)
+	       (remove (cadr entry) (gethash (car entry) index) :test #'equal))
+	 (when (eq nil (gethash (car entry) index))
+	   (remhash (car entry) index)))
+	(t (remove-entry (gethash (car entry) index) (cdr entry)))))
+
+(defun remove-from-indicies (triple)
+  (with-slots (subject predicate object) triple
+    (remove-entry *spo* (list subject predicate object))
+    (remove-entry *pos* (list predicate object subject))
+    (remove-entry *osp* (list object subject predicate))
+    (when (= 0 (hash-table-count (gethash subject *spo*)))
+      (remhash subject *spo*))
+    (when (= 0 (hash-table-count (gethash predicate *pos*)))
+      (remhash predicate *pos*))
+    (when (= 0 (hash-table-count (gethash object *osp*)))
+      (remhash object *osp*))))
+
+(defun query-index1 (index query)
+  (loop for key being the hash-keys of (gethash (first query) index)
+     using (hash-value value)
+     collect (list (first query) key value)))
+
+(defun query-index2 (index q1 q2)
+  (gethash (second q2) (gethash (first q1) index)))
+
+(defun query-index3 (index q1 q2 q3)
+  (find (third q3) (query-index2 index q1 q2) :test #'equal))
+
 (defun add-to-indices (triple)
   "Index the triple."
   (with-slots (subject predicate object) triple
@@ -58,6 +87,9 @@
 
 (defun rebuild-indicies ()
   "Literally tries to rebuild every index."
+  (setf *spo* (make-hash-table :test 'equal))
+  (setf *pos* (make-hash-table :test 'equal))
+  (setf *osp* (make-hash-table :test 'equal))
   (mapc #'add-to-indices (all-triples)))
 
 (defun add-triple (entry)
@@ -79,6 +111,7 @@ Entry: (subject predicate object graph)"
 Try to order the queries in an ascending order regarding the number of likely matches.
 Usage: (filter-triples (all-triples *my-triplestore*) '((predicate . has-tag) (object . yo)))"
   (cond ((eq parameters nil) triples)
+	((eq 'uuid (caar parameters)) (gethash (cdar parameters) *ts*))
 	(t (filter-triples (remove-if-not (lambda (triple) (equal (slot-value triple (caar parameters))
 								  (cdar parameters)))
 					  triples)
@@ -87,8 +120,9 @@ Usage: (filter-triples (all-triples *my-triplestore*) '((predicate . has-tag) (o
 (defun remove-triples (parameters)
   "Remove all triples in the triplestore that match the parameters.
 Parameters: '((subject NSA) (object evidence))"
-  (let ((uuids (loop for triple in (filter-triples (all-triples) parameters)
-		       collect (uuid triple))))
+  (let* ((triples (filter-triples (all-triples) parameters))
+	 (uuids (all-uuids)))
+    (mapc #'remove-from-indicies triples)
     (mapc (lambda (uuid) (remhash uuid *ts*)) uuids)))
 
 (defun save-ts (filepath)

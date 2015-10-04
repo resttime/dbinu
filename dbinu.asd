@@ -1,5 +1,4 @@
-(in-package :cl-user)
-
+(in-package #:cl-user)
 (asdf:defsystem dbinu
     :description "A triplestore database"
     :serial t
